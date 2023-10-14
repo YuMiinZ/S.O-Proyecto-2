@@ -8,10 +8,16 @@
 
 
 struct FileEntry {
-    char filename[256];
+    char filename[20];
     long size;
     long start_byte;
     long end_byte;
+};
+
+struct FreeBlock {
+    long start_byte;
+    long end_byte;
+    struct FreeBlock *next;
 };
 
 
@@ -23,7 +29,7 @@ void createArchive() {
 void extractArchive() {
 }
 
-//Command -l
+//Command -t
 void listContents() {
 }
 
@@ -31,13 +37,18 @@ void listContents() {
 void deleteFile() {
 }
 
+//Command -u //Reajuste de campos libres
+void update() {
+}
+
 //Command -r append
 void addFile() {
 }
 
-//Command -p
+//Command -p //Reajuste de campos libres
 void defragmentArchive() {
 }
+
 
 
 int main(int argc, char* argv[]) {
