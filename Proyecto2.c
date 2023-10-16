@@ -311,11 +311,6 @@ void pruebaRead1(){ // Muestra todos los bloques libres libres y no libres
 }
 
 int main(int argc, char* argv[]) {
-    
-    //FILE *fileToPack = fopen("prueba.txt", "rb");
-   // fseek(fileToPack, 512, SEEK_SET);
-    //fseek(fileToPack, 0, SEEK_END);
-    //printf("tamaño: %ld",ftell(fileToPack));
     printf("Cantidad de argumentos: %d\n", argc);
     printf("Lista de archivos: %s\n", argv[0]);
     printf("Lista de archivos: %s\n", argv[1]);
