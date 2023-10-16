@@ -478,7 +478,7 @@ void pruebaRead1(){
         exit(1);
     }
 
-    struct FreeBlock free_block[100]; // Supongamos que deseas leer 100 estructuras FreeBlock
+    struct FreeBlock free_block[100]; 
 
     // Calcula la posición donde comienzan los datos de FreeBlock en el archivo
     long freeBlockStart = sizeof(struct EntryFile) * 100;
