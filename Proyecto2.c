@@ -5,9 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h> 
+#include <sys/stat.h>
 
-
-struct FileEntry {
+struct EntryFile {
     char filename[20];
     long size;
     long start_byte;
@@ -17,13 +18,10 @@ struct FileEntry {
 struct FreeBlock {
     long start_byte;
     long end_byte;
-    struct FreeBlock *next;
 };
 
 
-//Command -c
-void createArchive() {
-}
+
 
 //Command -x
 void extractArchive() {
@@ -37,30 +35,304 @@ void listContents() {
 void deleteFile() {
 }
 
-//Command -u //Reajuste de campos libres
-void update() {
+//Command -u
+void update() { //
 }
 
 //Command -r append
-void addFile() {
+void addFile() {//
 }
 
 //Command -p //Reajuste de campos libres
-void defragmentArchive() {
+void defragmentArchive() {//
+}
+//---------------------------------------------------------------------------------------------------------------
+
+void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool *extract, bool *list, bool *delete, 
+                                 bool *update, bool *append, bool *pack, bool *foundF) {
+
+    char listaComandos[] = "-cxtduvfrpelt ";
+
+    for(int position=0; position<strlen(argv[1]);position++){
+        if (strchr(listaComandos, argv[1][position]) == NULL) {
+            printf("\nComando no válido: %c\n", argv[1][position]);
+            exit(1);
+        }
+        else{
+            if(argv[1][position] =='v'){
+                *verbose = true; 
+            }
+            else if(argv[1][position] =='c'){
+                *create = true; 
+            }
+            else if(argv[1][position] =='x'){
+                *extract = true; 
+            }
+            else if(argv[1][position] =='t'){
+                *list = true; 
+            }
+            else if(argv[1][position] =='d'){
+                *delete = true; 
+            }
+            else if(argv[1][position] =='u'){
+                *update = true; 
+            }
+            else if(argv[1][position] =='r'){
+                *append = true; 
+            }
+            else if(argv[1][position] =='p'){
+                *pack = true; 
+            }
+            else if(argv[1][position] =='f'){
+                printf("Comando final encontrado: %c\n", argv[1][position]);
+                *foundF = true; 
+                break;
+            }
+            printf("Comando válido: %c\n", argv[1][position]);
+            
+        }
+    }
+    printf("Último comando ingresado: %c\n", argv[1][strlen(argv[1])-1]);
 }
 
+void pruebaRead2() { //Muestra Header con datos (lista contenido)
+    struct EntryFile empResult[100]; 
+    FILE *f = fopen("pruebaTar.tar", "rb");
 
+    if (f != NULL) {
+        size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
 
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        printf("Formato: %s <comando> <archivo_empacado> [archivos...]\n", argv[0]);
-        exit(0);
+        if (result > 0) {
+            fclose(f);
+
+            for (int i = 0; i < result; i++) {
+                if (empResult[i].start_byte != 0 || empResult[i].end_byte != 0 || empResult[i].size != 0 || empResult[i].filename[0] != '\0') {
+                    printf("Data from file %d, StartByte: %ld, EndByte: %ld, Size: %ld, Name: %s\n", i, 
+                            empResult[i].start_byte, empResult[i].end_byte, empResult[i].size, empResult[i].filename);
+                }
+            }
+        } else {
+            printf("Error reading from the file\n");
+            fclose(f);
+            exit(1);
+        }
+    } else {
+        printf("Error opening the file to read data\n");
+        exit(1);
+    }
+}
+
+void create(char *tarName, char *filesToAdd) {
+    FILE *fp_tar = fopen("pruebaTar.tar", "wb");
+    if (fp_tar == NULL) {
+        perror("No se pudo abrir el archivo de destino");
+        exit(1);
     }
 
-    const char* comando = argv[1];
-    const char* archivoEmpacado = argv[2];
+    struct stat informacion_archivo;
+    struct EntryFile header[100];
+    struct FreeBlock free_block[100];
 
-    printf("holaaaa %s holaaaa", archivoEmpacado);
+    for (int i = 0; i < 100; i++) {
+        free_block[i].start_byte = 0;
+        free_block[i].end_byte = 0;
+    }
 
+    char *archivo;
+    char *archivos_copy = strdup(filesToAdd);
+    int fileCount = 0;
+    long contentStart = (sizeof(struct EntryFile) * 100) + (sizeof(struct FreeBlock) * 100);
+    
+    fseek(fp_tar, contentStart, SEEK_END);
+    char *token = strtok(filesToAdd, ", ");
+    while (token != NULL) {
+        if (fileCount >= 100) {
+            printf("Se alcanzó el límite de 100 archivos. No se copiarán más.\n");
+            break;
+        }
+
+        printf("Nombre de archivo a empacar: %s\n", token);
+        strcpy(header[fileCount].filename, token);
+        FILE *fp_archivo = fopen(token, "rb");
+        if (fp_archivo == NULL) {
+            perror("No se pudo abrir el archivo de origen");
+            fclose(fp_tar);
+            free(archivos_copy); 
+            exit(1);
+        }
+        
+        stat(token, &informacion_archivo);
+        printf("tamaño: %ld\n",(long)informacion_archivo.st_size);
+        header[fileCount].size = (long)informacion_archivo.st_size;
+        header[fileCount].start_byte = contentStart;
+        header[fileCount].end_byte = contentStart + (long)informacion_archivo.st_size;
+        printf("Puntero Final Suposición: %ld\n", header[fileCount].end_byte);
+
+        fseek(fp_tar, contentStart, SEEK_SET);
+        printf("Inicio segun contentStart: %ld\n",contentStart);
+        printf("Inicio de lectura: %ld\n", ftell(fp_tar));
+        char buffer[4096]; 
+        size_t bytes_leidos;
+
+        while ((bytes_leidos = fread(buffer, 1, sizeof(buffer), fp_archivo)) > 0) {
+            fwrite(buffer, 1, bytes_leidos, fp_tar);
+        }
+        
+        contentStart = header[fileCount].end_byte;
+        printf("Proximo startbyte: %ld\n\n", contentStart);
+
+        fclose(fp_archivo);
+        fileCount++;
+        token = strtok(NULL, ", ");
+    }
+    fseek(fp_tar, 0, SEEK_SET);
+    fwrite(header, sizeof(struct EntryFile), fileCount, fp_tar);
+
+    fseek(fp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
+    fwrite(free_block, sizeof(struct FreeBlock), 100, fp_tar);
+    
+    printf("dios %d", fileCount);
+    fclose(fp_tar);
+    free(archivos_copy);
+
+    printf("ASJDKAS %s,",header[1].filename);
+    printf("Archivos copiados al archivo tar exitosamente.\n");
+}
+
+void pruebaRead() { //Muestra todo el header
+    struct EntryFile empResult[100]; 
+    FILE *f = fopen("pruebaTar.tar", "rb");
+
+    if (f != NULL) {
+        size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
+
+        if (result > 0) {
+            fclose(f);
+
+            for (int i = 0; i < result; i++) {
+                printf("Data from file %d, StartByte: %ld, EndByte: %ld, Size: %ld, Name: %s\n", i, 
+                        empResult[i].start_byte, empResult[i].end_byte, empResult[i].size, empResult[i].filename);
+            }
+        } else {
+            printf("Error reading from the file\n");
+            fclose(f);
+            exit(1);
+        }
+    } else {
+        printf("Error opening the file to read data\n");
+        exit(1);
+    }
+}
+
+void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
+    FILE *inputFile = fopen("pruebaTar.tar", "rb");
+    if (inputFile == NULL) {
+        perror("No se pudo abrir el archivo de entrada");
+        exit(1);
+    }
+
+    FILE *outputFile = fopen("pruebaExtract.txt", "wb");
+    if (outputFile == NULL) {
+        perror("No se pudo crear el archivo de salida");
+        fclose(inputFile);
+        exit(1);
+    }
+
+    long startByte = 733022;
+    long endByte = 1459644;
+
+    fseek(inputFile, startByte, SEEK_SET);
+
+    char buffer[1024];
+    long bytesRead = 0;
+
+    while (startByte < endByte) {
+        size_t bytesToRead = (endByte - startByte) < sizeof(buffer) ? (size_t)(endByte - startByte) : sizeof(buffer);
+        size_t bytesReadThisIteration = fread(buffer, 1, bytesToRead, inputFile);
+
+        fwrite(buffer, 1, bytesReadThisIteration, outputFile);
+
+        startByte += bytesReadThisIteration;
+        bytesRead += bytesReadThisIteration;
+    }
+
+    fclose(inputFile);
+    fclose(outputFile);
+
+    printf("Se extrajeron %ld bytes al archivo pruebaExtract.txt\n", bytesRead);
+}
+
+void pruebaRead1_1(){ // Muestra los bloques libres (Ninguno tiene dato xq no hay ninguno libre)
+    const char *tarFile = "pruebaTar.tar";
+    FILE *fp_tar = fopen(tarFile, "rb");
+
+    if (fp_tar == NULL) {
+        perror("No se pudo abrir el archivo tar");
+        exit(1);
+    }
+
+    struct FreeBlock free_block[100]; 
+
+    long freeBlockStart = sizeof(struct EntryFile) * 100;
+    fseek(fp_tar, freeBlockStart, SEEK_SET);
+
+    fread(free_block, sizeof(struct FreeBlock), 100, fp_tar);
+
+    fclose(fp_tar);
+
+    for (int i = 0; i < 100; i++) {
+        if (free_block[i].start_byte != 0 || free_block[i].end_byte != 0) {
+            printf("Free Block %d, StartByte: %ld, EndByte: %ld\n", i, free_block[i].start_byte, free_block[i].end_byte);
+        }
+    }
+}
+
+void pruebaRead1(){ // Muestra todos los bloques libres libres y no libres
+    const char *tarFile = "pruebaTar.tar";
+    FILE *fp_tar = fopen(tarFile, "rb");
+
+    if (fp_tar == NULL) {
+        perror("No se pudo abrir el archivo tar");
+        exit(1);
+    }
+
+    struct FreeBlock free_block[100]; 
+
+    long freeBlockStart = sizeof(struct EntryFile) * 100;
+    fseek(fp_tar, freeBlockStart, SEEK_SET);
+
+    fread(free_block, sizeof(struct FreeBlock), 100, fp_tar);
+
+    fclose(fp_tar);
+
+    for (int i = 0; i < 100; i++) {
+        printf("Free Block %d, StartByte: %ld, EndByte: %ld\n", i, free_block[i].start_byte, free_block[i].end_byte);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    
+    //FILE *fileToPack = fopen("prueba.txt", "rb");
+   // fseek(fileToPack, 512, SEEK_SET);
+    //fseek(fileToPack, 0, SEEK_END);
+    //printf("tamaño: %ld",ftell(fileToPack));
+    printf("Cantidad de argumentos: %d\n", argc);
+    printf("Lista de archivos: %s\n", argv[0]);
+    printf("Lista de archivos: %s\n", argv[1]);
+    printf("Lista de archivos: %s\n", argv[2]);
+    printf("Lista de archivos: %s\n", argv[3]);
+    printf("Lista de archivos: %s\n\n", argv[4]);
+    //Verificar comandos para saber que función activar.
+    //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
+    create(argv[2], argv[3]); //Este es el create que funciona
+    //pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
+    //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
+    //pruebaRead1_1(); //Muestra todos los libres (con datos de cuáles son libres)
+    //pruebaRead2(); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
+
+    //pruebaExtract(); //Funciona para extraer 1 en específico y con datos quemados, esto lo hice de acuerdo
+                    //Con los datos de pruebaRead2() para ver si me extraia bien los archivos
+                    //Solo se testeó ingresar 2 veces prueba.txt
+                    
     exit(0);
 }
