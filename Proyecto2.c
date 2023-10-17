@@ -44,7 +44,38 @@ void addFile() {//
 }
 
 //Command -p //Reajuste de campos libres
-void defragmentArchive() {//
+void defragmentArchive() {
+    struct EntryFile files[100];
+    struct FreeBlock blocks[100];
+    FILE *f = fopen("pruebaTar.star", "r+");
+    fread(files, sizeof(struct EntryFile)*100, 1, f);
+    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    blocks[0].start_byte = 6400;
+    blocks[0].end_byte = 78085;/*
+    files[0].start_byte = 0;
+    files[0].end_byte = 0;*/
+    for (int i = 0; i < 100; i++){
+        for (int j = 0; j < 100; j++){
+            if (blocks[i].end_byte == files[j].start_byte){
+                printf("Entre\n");
+                char file[files[j].size];
+                fseek(f, files[j].start_byte, SEEK_SET);
+                fread(file, files[j].size, 1, f);
+                fseek(f, blocks[i].start_byte, SEEK_SET);
+                fwrite(file, files[j].size, 1, f);
+                files[j].start_byte = blocks[i].start_byte;
+                files[j].end_byte = ftell(f);
+                blocks[i].start_byte = ftell(f);
+                blocks[i].end_byte = ftell(f) + files[j].size;
+                break;
+            }
+        }
+    }
+    fseek(f, 0, SEEK_SET);
+    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
+    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    fclose(f);
+    printf("header: %ld\n ", files[0].start_byte);
 }
 //---------------------------------------------------------------------------------------------------------------
 
@@ -97,7 +128,7 @@ void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool
 
 void pruebaRead2() { //Muestra Header con datos (lista contenido)
     struct EntryFile empResult[100]; 
-    FILE *f = fopen("pruebaTar.tar", "rb");
+    FILE *f = fopen("pruebaTar.star", "rb");
 
     if (f != NULL) {
         size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
@@ -123,7 +154,7 @@ void pruebaRead2() { //Muestra Header con datos (lista contenido)
 }
 
 void create(char *tarName, char *filesToAdd) {
-    FILE *fp_tar = fopen("pruebaTar.tar", "wb");
+    FILE *fp_tar = fopen("pruebaTar.star", "wb");
     if (fp_tar == NULL) {
         perror("No se pudo abrir el archivo de destino");
         exit(1);
@@ -196,12 +227,12 @@ void create(char *tarName, char *filesToAdd) {
     free(archivos_copy);
 
     printf("ASJDKAS %s,",header[1].filename);
-    printf("Archivos copiados al archivo tar exitosamente.\n");
+    printf("Archivos copiados al archivo star exitosamente.\n");
 }
 
 void pruebaRead() { //Muestra todo el header
     struct EntryFile empResult[100]; 
-    FILE *f = fopen("pruebaTar.tar", "rb");
+    FILE *f = fopen("pruebaTar.star", "rb");
 
     if (f != NULL) {
         size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
@@ -225,7 +256,7 @@ void pruebaRead() { //Muestra todo el header
 }
 
 void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
-    FILE *inputFile = fopen("pruebaTar.tar", "rb");
+    FILE *inputFile = fopen("pruebaTar.star", "rb");
     if (inputFile == NULL) {
         perror("No se pudo abrir el archivo de entrada");
         exit(1);
@@ -263,11 +294,11 @@ void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
 }
 
 void pruebaRead1_1(){ // Muestra los bloques libres (Ninguno tiene dato xq no hay ninguno libre)
-    const char *tarFile = "pruebaTar.tar";
+    const char *tarFile = "pruebaTar.star";
     FILE *fp_tar = fopen(tarFile, "rb");
 
     if (fp_tar == NULL) {
-        perror("No se pudo abrir el archivo tar");
+        perror("No se pudo abrir el archivo star");
         exit(1);
     }
 
@@ -288,11 +319,11 @@ void pruebaRead1_1(){ // Muestra los bloques libres (Ninguno tiene dato xq no ha
 }
 
 void pruebaRead1(){ // Muestra todos los bloques libres libres y no libres
-    const char *tarFile = "pruebaTar.tar";
+    const char *tarFile = "pruebaTar.star";
     FILE *fp_tar = fopen(tarFile, "rb");
 
     if (fp_tar == NULL) {
-        perror("No se pudo abrir el archivo tar");
+        perror("No se pudo abrir el archivo star");
         exit(1);
     }
 
@@ -317,10 +348,11 @@ int main(int argc, char* argv[]) {
     printf("Lista de archivos: %s\n", argv[2]);
     printf("Lista de archivos: %s\n", argv[3]);
     printf("Lista de archivos: %s\n\n", argv[4]);
+    defragmentArchive();
     //Verificar comandos para saber que función activar.
     //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
-    create(argv[2], argv[3]); //Este es el create que funciona
-    //pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
+    //create(argv[2], argv[3]); //Este es el create que funciona
+    pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
     //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
     //pruebaRead1_1(); //Muestra todos los libres (con datos de cuáles son libres)
     //pruebaRead2(); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
