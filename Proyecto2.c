@@ -1,4 +1,4 @@
-/*Proyecto #1. Sistemas Operativos
+/*Proyecto #2. Sistemas Operativos
  *Elaborado por Tomás Coto y Ericka Guo
 */
 
@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h> 
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 struct EntryFile {
@@ -43,42 +45,83 @@ void update() { //
 void addFile() {//
 }
 
+int numBlock(struct FreeBlock *Free){
+    int numFree = 0;
+    for (int i = 0; i < 100; i++){
+        if (Free[i].start_byte != 0 && Free[i].end_byte != 0){
+            numFree++;
+        }
+    }
+    return numFree; 
+}
+
+bool concatenateBlocks(struct FreeBlock *Free){
+    for (int i = 0; i < 100; i++){
+        if (Free[i].start_byte == 0 && Free[i].end_byte == 0){
+            continue;
+        }
+        for (int j = 0; j < 100; j++){
+            if (Free[i].end_byte == Free[j].start_byte){
+                Free[i].end_byte = Free[j].end_byte;
+                Free[j].start_byte = 0;
+                Free[j].end_byte = 0;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //Command -p //Reajuste de campos libres
 void defragmentArchive() {
     struct EntryFile files[100];
     struct FreeBlock blocks[100];
+
     FILE *f = fopen("pruebaTar.star", "r+");
     fread(files, sizeof(struct EntryFile)*100, 1, f);
     fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
-    blocks[0].start_byte = 6400;
-    blocks[0].end_byte = 78085;/*
-    files[0].start_byte = 0;
-    files[0].end_byte = 0;*/
-    for (int i = 0; i < 100; i++){
-        for (int j = 0; j < 100; j++){
-            if (blocks[i].end_byte == files[j].start_byte){
-                printf("Entre\n");
-                char file[files[j].size];
-                fseek(f, files[j].start_byte, SEEK_SET);
-                fread(file, files[j].size, 1, f);
-                fseek(f, blocks[i].start_byte, SEEK_SET);
-                fwrite(file, files[j].size, 1, f);
-                files[j].start_byte = blocks[i].start_byte;
-                files[j].end_byte = ftell(f);
-                blocks[i].start_byte = ftell(f);
-                blocks[i].end_byte = ftell(f) + files[j].size;
-                break;
+    
+    blocks[0].start_byte = 6400; // Se eliminan cuando delete se integre
+    blocks[0].end_byte = 78085;  
+    blocks[2].start_byte = 804707;
+    blocks[2].end_byte = 6449256;
+
+    int numRealBlocks = numBlock(blocks);
+    while (numRealBlocks > 0){
+        for (int i = 0; i < 100; i++){
+            for (int j = 0; j < 100; j++){
+                if (blocks[i].end_byte == files[j].start_byte){
+                    char file[files[j].size];
+
+                    fseek(f, files[j].start_byte, SEEK_SET);
+                    fread(file, files[j].size, 1, f);
+
+                    fseek(f, blocks[i].start_byte, SEEK_SET);
+                    fwrite(file, files[j].size, 1, f);
+
+                    files[j].start_byte = blocks[i].start_byte;
+                    blocks[i].end_byte = files[j].end_byte;
+                    files[j].end_byte =  blocks[i].start_byte = ftell(f);
+                    //printf("fin: %ld\n", files[i].end_byte);
+                    if (concatenateBlocks(blocks)){
+                        numRealBlocks--;
+                        if (numRealBlocks == 1){
+                            numRealBlocks = 0;
+                        }
+                    }
+                    break;
+                }
             }
         }
     }
     fseek(f, 0, SEEK_SET);
     fwrite(files, sizeof(struct EntryFile)*100, 1, f);
     fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    ftruncate(fileno(f), blocks[0].end_byte);
+    printf("NUM: %d\n", numRealBlocks);
     fclose(f);
-    printf("header: %ld\n ", files[0].start_byte);
 }
 //---------------------------------------------------------------------------------------------------------------
-
 void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool *extract, bool *list, bool *delete, 
                                  bool *update, bool *append, bool *pack, bool *foundF) {
 
@@ -353,7 +396,7 @@ int main(int argc, char* argv[]) {
     //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
     //create(argv[2], argv[3]); //Este es el create que funciona
     pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
-    //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
+    pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
     //pruebaRead1_1(); //Muestra todos los libres (con datos de cuáles son libres)
     //pruebaRead2(); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
 
