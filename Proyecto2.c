@@ -197,11 +197,7 @@ void list(char *tarName) { //Muestra Header con datos (lista contenido)
 }
 
 void create(char *tarName, char *filesToAdd) {
-<<<<<<< HEAD
-    FILE *fp_tar = fopen(tarName, "wb");
-=======
     FILE *fp_tar = fopen("pruebaTar.star", "wb");
->>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
     if (fp_tar == NULL) {
         perror("No se pudo abrir el archivo de destino");
         exit(1);
@@ -272,12 +268,7 @@ void create(char *tarName, char *filesToAdd) {
     fclose(fp_tar);
     free(archivos_copy);
 
-<<<<<<< HEAD
     printf("Archivos copiados al archivo tar exitosamente.\n");
-=======
-    printf("ASJDKAS %s,",header[1].filename);
-    printf("Archivos copiados al archivo star exitosamente.\n");
->>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
 }
 
 void pruebaRead() { //Muestra todo el header
@@ -305,15 +296,10 @@ void pruebaRead() { //Muestra todo el header
     }
 }
 
-<<<<<<< HEAD
 void extract(char *tarName, char *fileName, long start_byte, long end_byte){
     printf("Nombre Tar: %s, Nombre nuevo archivo: %s, Start Extract: %ld, End Extract: %ld\n\n",
     tarName, fileName, start_byte, end_byte);
     FILE *inputFile = fopen(tarName, "rb");
-=======
-void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
-    FILE *inputFile = fopen("pruebaTar.star", "rb");
->>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
     if (inputFile == NULL) {
         perror("No se pudo abrir el archivo de entrada");
         exit(1);
@@ -350,20 +336,11 @@ void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
     printf("Se extrajeron %ld bytes al archivo pruebaExtract.txt\n\n", bytesRead);
 }
 
-<<<<<<< HEAD
 struct EntryFile *getListHeader(char *tarName) {
     struct EntryFile *resultCopy = malloc(sizeof(struct EntryFile) * 100);
 
     if (resultCopy == NULL) {
         perror("Error al asignar memoria para copiar los datos");
-=======
-void pruebaRead1_1(){ // Muestra los bloques libres (Ninguno tiene dato xq no hay ninguno libre)
-    const char *tarFile = "pruebaTar.star";
-    FILE *fp_tar = fopen(tarFile, "rb");
-
-    if (fp_tar == NULL) {
-        perror("No se pudo abrir el archivo star");
->>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
         exit(1);
     }
 
@@ -533,7 +510,6 @@ int sortFreeblockStructure(const void *a, const void *b) {
 
 int main(int argc, char* argv[]) {
     printf("Cantidad de argumentos: %d\n", argc);
-<<<<<<< HEAD
     printf("./a.out: %s\n", argv[0]);
     printf("Comando: %s\n", argv[1]);
     printf("Archivo de salida .star: %s\n", argv[2]);
@@ -554,21 +530,6 @@ int main(int argc, char* argv[]) {
     //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
     //pruebaFreeBlocks(); //Muestra todos los libres (con datos de cuáles son libres)
     
-=======
-    printf("Lista de archivos: %s\n", argv[0]);
-    printf("Lista de archivos: %s\n", argv[1]);
-    printf("Lista de archivos: %s\n", argv[2]);
-    printf("Lista de archivos: %s\n", argv[3]);
-    printf("Lista de archivos: %s\n\n", argv[4]);
-    defragmentArchive();
-    //Verificar comandos para saber que función activar.
-    //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
-    //create(argv[2], argv[3]); //Este es el create que funciona
-    pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
-    pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
-    //pruebaRead1_1(); //Muestra todos los libres (con datos de cuáles son libres)
-    //pruebaRead2(); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
->>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
 
     
                     
