@@ -1,4 +1,4 @@
-/*Proyecto #1. Sistemas Operativos
+/*Proyecto #2. Sistemas Operativos
  *Elaborado por Tomás Coto y Ericka Guo
 */
 
@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h> 
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 struct EntryFile {
@@ -43,11 +45,83 @@ void update() { //
 void addFile() {//
 }
 
+int numBlock(struct FreeBlock *Free){
+    int numFree = 0;
+    for (int i = 0; i < 100; i++){
+        if (Free[i].start_byte != 0 && Free[i].end_byte != 0){
+            numFree++;
+        }
+    }
+    return numFree; 
+}
+
+bool concatenateBlocks(struct FreeBlock *Free){
+    for (int i = 0; i < 100; i++){
+        if (Free[i].start_byte == 0 && Free[i].end_byte == 0){
+            continue;
+        }
+        for (int j = 0; j < 100; j++){
+            if (Free[i].end_byte == Free[j].start_byte){
+                Free[i].end_byte = Free[j].end_byte;
+                Free[j].start_byte = 0;
+                Free[j].end_byte = 0;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //Command -p //Reajuste de campos libres
-void defragmentArchive() {//
+void defragmentArchive() {
+    struct EntryFile files[100];
+    struct FreeBlock blocks[100];
+
+    FILE *f = fopen("pruebaTar.star", "r+");
+    fread(files, sizeof(struct EntryFile)*100, 1, f);
+    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    
+    blocks[0].start_byte = 6400; // Se eliminan cuando delete se integre
+    blocks[0].end_byte = 78085;  
+    blocks[2].start_byte = 804707;
+    blocks[2].end_byte = 6449256;
+
+    int numRealBlocks = numBlock(blocks);
+    while (numRealBlocks > 0){
+        for (int i = 0; i < 100; i++){
+            for (int j = 0; j < 100; j++){
+                if (blocks[i].end_byte == files[j].start_byte){
+                    char file[files[j].size];
+
+                    fseek(f, files[j].start_byte, SEEK_SET);
+                    fread(file, files[j].size, 1, f);
+
+                    fseek(f, blocks[i].start_byte, SEEK_SET);
+                    fwrite(file, files[j].size, 1, f);
+
+                    files[j].start_byte = blocks[i].start_byte;
+                    blocks[i].end_byte = files[j].end_byte;
+                    files[j].end_byte =  blocks[i].start_byte = ftell(f);
+                    //printf("fin: %ld\n", files[i].end_byte);
+                    if (concatenateBlocks(blocks)){
+                        numRealBlocks--;
+                        if (numRealBlocks == 1){
+                            numRealBlocks = 0;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    fseek(f, 0, SEEK_SET);
+    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
+    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    ftruncate(fileno(f), blocks[0].end_byte);
+    printf("NUM: %d\n", numRealBlocks);
+    fclose(f);
 }
 //---------------------------------------------------------------------------------------------------------------
-
 void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool *extract, bool *list, bool *delete, 
                                  bool *update, bool *append, bool *pack, bool *foundF) {
 
@@ -97,7 +171,7 @@ void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool
 
 void list(char *tarName) { //Muestra Header con datos (lista contenido)
     struct EntryFile empResult[100]; 
-    FILE *f = fopen("pruebaTar.tar", "rb");
+    FILE *f = fopen("pruebaTar.star", "rb");
 
     if (f != NULL) {
         size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
@@ -123,7 +197,11 @@ void list(char *tarName) { //Muestra Header con datos (lista contenido)
 }
 
 void create(char *tarName, char *filesToAdd) {
+<<<<<<< HEAD
     FILE *fp_tar = fopen(tarName, "wb");
+=======
+    FILE *fp_tar = fopen("pruebaTar.star", "wb");
+>>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
     if (fp_tar == NULL) {
         perror("No se pudo abrir el archivo de destino");
         exit(1);
@@ -194,12 +272,17 @@ void create(char *tarName, char *filesToAdd) {
     fclose(fp_tar);
     free(archivos_copy);
 
+<<<<<<< HEAD
     printf("Archivos copiados al archivo tar exitosamente.\n");
+=======
+    printf("ASJDKAS %s,",header[1].filename);
+    printf("Archivos copiados al archivo star exitosamente.\n");
+>>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
 }
 
 void pruebaRead() { //Muestra todo el header
     struct EntryFile empResult[100]; 
-    FILE *f = fopen("pruebaTar.tar", "rb");
+    FILE *f = fopen("pruebaTar.star", "rb");
 
     if (f != NULL) {
         size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
@@ -222,10 +305,15 @@ void pruebaRead() { //Muestra todo el header
     }
 }
 
+<<<<<<< HEAD
 void extract(char *tarName, char *fileName, long start_byte, long end_byte){
     printf("Nombre Tar: %s, Nombre nuevo archivo: %s, Start Extract: %ld, End Extract: %ld\n\n",
     tarName, fileName, start_byte, end_byte);
     FILE *inputFile = fopen(tarName, "rb");
+=======
+void pruebaExtract(){ //Extrae solo lo primero y los datos están quemados
+    FILE *inputFile = fopen("pruebaTar.star", "rb");
+>>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
     if (inputFile == NULL) {
         perror("No se pudo abrir el archivo de entrada");
         exit(1);
@@ -262,11 +350,20 @@ void extract(char *tarName, char *fileName, long start_byte, long end_byte){
     printf("Se extrajeron %ld bytes al archivo pruebaExtract.txt\n\n", bytesRead);
 }
 
+<<<<<<< HEAD
 struct EntryFile *getListHeader(char *tarName) {
     struct EntryFile *resultCopy = malloc(sizeof(struct EntryFile) * 100);
 
     if (resultCopy == NULL) {
         perror("Error al asignar memoria para copiar los datos");
+=======
+void pruebaRead1_1(){ // Muestra los bloques libres (Ninguno tiene dato xq no hay ninguno libre)
+    const char *tarFile = "pruebaTar.star";
+    FILE *fp_tar = fopen(tarFile, "rb");
+
+    if (fp_tar == NULL) {
+        perror("No se pudo abrir el archivo star");
+>>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
         exit(1);
     }
 
@@ -344,11 +441,11 @@ void startExtract(char *tarName, char *filesToExtract){ //Extrae solo lo primero
 }
 
 void pruebaRead1(){ // Muestra todos los bloques libres libres y no libres
-    const char *tarFile = "pruebaTar.tar";
+    const char *tarFile = "pruebaTar.star";
     FILE *fp_tar = fopen(tarFile, "rb");
 
     if (fp_tar == NULL) {
-        perror("No se pudo abrir el archivo tar");
+        perror("No se pudo abrir el archivo star");
         exit(1);
     }
 
@@ -436,6 +533,7 @@ int sortFreeblockStructure(const void *a, const void *b) {
 
 int main(int argc, char* argv[]) {
     printf("Cantidad de argumentos: %d\n", argc);
+<<<<<<< HEAD
     printf("./a.out: %s\n", argv[0]);
     printf("Comando: %s\n", argv[1]);
     printf("Archivo de salida .star: %s\n", argv[2]);
@@ -456,6 +554,21 @@ int main(int argc, char* argv[]) {
     //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
     //pruebaFreeBlocks(); //Muestra todos los libres (con datos de cuáles son libres)
     
+=======
+    printf("Lista de archivos: %s\n", argv[0]);
+    printf("Lista de archivos: %s\n", argv[1]);
+    printf("Lista de archivos: %s\n", argv[2]);
+    printf("Lista de archivos: %s\n", argv[3]);
+    printf("Lista de archivos: %s\n\n", argv[4]);
+    defragmentArchive();
+    //Verificar comandos para saber que función activar.
+    //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
+    //create(argv[2], argv[3]); //Este es el create que funciona
+    pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
+    pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
+    //pruebaRead1_1(); //Muestra todos los libres (con datos de cuáles son libres)
+    //pruebaRead2(); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
+>>>>>>> 28c6983447a3a7bb61c86939ef78ed676ccb3ce0
 
     
                     
