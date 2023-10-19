@@ -45,14 +45,15 @@ void update() { //
 void addFile() {//
 }
 
-int numBlock(struct FreeBlock *Free){
-    int numFree = 0;
+void numTotal(struct FreeBlock *Free, struct EntryFile *Files, int *nums){
     for (int i = 0; i < 100; i++){
         if (Free[i].start_byte != 0 && Free[i].end_byte != 0){
-            numFree++;
+            nums[0]++;
+        }
+        if (Files[i].start_byte != 0 && Files[i].end_byte != 0){
+            nums[1]++;
         }
     }
-    return numFree; 
 }
 
 bool concatenateBlocks(struct FreeBlock *Free){
@@ -76,49 +77,49 @@ bool concatenateBlocks(struct FreeBlock *Free){
 void defragmentArchive() {
     struct EntryFile files[100];
     struct FreeBlock blocks[100];
+    int numblocks[2];
+    int count = 0;
 
     FILE *f = fopen("pruebaTar.star", "r+");
     fread(files, sizeof(struct EntryFile)*100, 1, f);
     fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
-    
-    blocks[0].start_byte = 6400; // Se eliminan cuando delete se integre
-    blocks[0].end_byte = 78085;  
-    blocks[2].start_byte = 804707;
-    blocks[2].end_byte = 6449256;
 
-    int numRealBlocks = numBlock(blocks);
-    while (numRealBlocks > 0){
+    numTotal(blocks, files, numblocks);
+
+    while (numblocks[0] >= 0 && count <= numblocks[1]+1){
         for (int i = 0; i < 100; i++){
+            if (blocks[i].end_byte == 0 && blocks[i].end_byte == 0){
+                continue;
+            }
+
             for (int j = 0; j < 100; j++){
-                if (blocks[i].end_byte == files[j].start_byte){
-                    char file[files[j].size];
+                if (blocks[i].end_byte != files[j].start_byte){
+                    continue;
+                }  
+                char file[files[j].size];
 
-                    fseek(f, files[j].start_byte, SEEK_SET);
-                    fread(file, files[j].size, 1, f);
+                fseek(f, files[j].start_byte, SEEK_SET);
+                fread(file, files[j].size, 1, f);
+                printf("Posicion inicial archivo: %ld, posicion final: %ld\n", files[j].start_byte, files[j].end_byte);
 
-                    fseek(f, blocks[i].start_byte, SEEK_SET);
-                    fwrite(file, files[j].size, 1, f);
+                fseek(f, blocks[i].start_byte, SEEK_SET);
+                fwrite(file, files[j].size, 1, f);
 
-                    files[j].start_byte = blocks[i].start_byte;
-                    blocks[i].end_byte = files[j].end_byte;
-                    files[j].end_byte =  blocks[i].start_byte = ftell(f);
-                    //printf("fin: %ld\n", files[i].end_byte);
-                    if (concatenateBlocks(blocks)){
-                        numRealBlocks--;
-                        if (numRealBlocks == 1){
-                            numRealBlocks = 0;
-                        }
-                    }
-                    break;
+                files[j].start_byte = blocks[i].start_byte;
+                blocks[i].end_byte = files[j].end_byte;
+                files[j].end_byte =  blocks[i].start_byte = ftell(f);
+                printf("Nueva posicion del archivo: I: %ld F: %ld\n", files[j].start_byte, files[j].end_byte);
+                if (concatenateBlocks(blocks)){
+                    numblocks[0]--;
                 }
             }
         }
+        count++;
     }
+
     fseek(f, 0, SEEK_SET);
     fwrite(files, sizeof(struct EntryFile)*100, 1, f);
     fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
-    ftruncate(fileno(f), blocks[0].end_byte);
-    printf("NUM: %d\n", numRealBlocks);
     fclose(f);
 }
 //---------------------------------------------------------------------------------------------------------------
@@ -523,7 +524,7 @@ int main(int argc, char* argv[]) {
     //startExtract(argv[2], argv[3]); //Funciona para extraer 1 en específico y con datos quemados, esto lo hice de acuerdo
     list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
     //delete(argv[2], argv[3]); //Elimina 1 archivo, actualiza el header y los bloques libres
-
+    //defragmentArchive();
 
 
     //pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
