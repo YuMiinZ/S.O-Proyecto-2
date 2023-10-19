@@ -112,6 +112,7 @@ void defragmentArchive() {
                 if (concatenateBlocks(blocks)){
                     numblocks[0]--;
                 }
+                printf("Posicion del bloque: I:%ld, F: %ld\n", blocks[0].start_byte, blocks[0].end_byte);
             }
         }
         count++;
@@ -120,6 +121,7 @@ void defragmentArchive() {
     fseek(f, 0, SEEK_SET);
     fwrite(files, sizeof(struct EntryFile)*100, 1, f);
     fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    ftruncate(fileno(f), blocks[0].start_byte);
     fclose(f);
 }
 //---------------------------------------------------------------------------------------------------------------
@@ -522,7 +524,7 @@ int main(int argc, char* argv[]) {
     //verificarComandos(argc, argv, &verbose, &create, &extract, &list, &delete, &update, &append, &pack, &foundF); 
     //create(argv[2], argv[3]); //Este es el create que funciona
     //startExtract(argv[2], argv[3]); //Funciona para extraer 1 en específico y con datos quemados, esto lo hice de acuerdo
-    list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
+    //list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
     //delete(argv[2], argv[3]); //Elimina 1 archivo, actualiza el header y los bloques libres
     //defragmentArchive();
 
