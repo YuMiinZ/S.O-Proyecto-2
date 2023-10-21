@@ -37,6 +37,32 @@ void listContents() {
 void deleteFile() {
 }
 
+int findBlock(struct FreeBlock *blocks, long size, int i){
+    int noblock;
+    for (i = 0; i < 100; i++){
+        if (blocks[i].end_byte - blocks[i].start_byte >= size){
+            noblock = 0;
+            break;
+        }
+        noblock = 1;
+    }
+    return noblock;
+}
+
+void copyHeader(struct FreeBlock *blocks, struct EntryFile *files, char *tarName){
+    FILE *f = fopen(tarName, "r+");
+    fread(files, sizeof(struct EntryFile)*100, 1, f);
+    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    fclose(f);
+}
+
+void pasteHeader(struct FreeBlock *blocks, struct EntryFile *files, char *tarName){
+    FILE *f = fopen(tarName, "r+");
+    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
+    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    fclose(f);
+}
+
 //Command -u
 void update() { //
 }
@@ -49,8 +75,7 @@ void addFile(char *tarName, char *newFile) {//
     struct stat informacion_archivo;
 
     FILE *f = fopen(tarName, "r+");
-    fread(files, sizeof(struct EntryFile)*100, 1, f);
-    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    copyHeader(blocks, files, tarName);
     strcpy(file0, files[0].filename);
 
     FILE *nf = fopen(newFile, "r");
@@ -61,13 +86,7 @@ void addFile(char *tarName, char *newFile) {//
     int noblock = 1;
 
     // Revisa si cabe en algun hueco existente
-    for (i = 0; i < 100; i++){
-        if (blocks[i].end_byte - blocks[i].start_byte >= informacion_archivo.st_size){
-            noblock = 0;
-            break;
-        }
-        noblock = 1;
-    }
+    noblock = (findBlock(blocks, informacion_archivo.st_size, i));
     // Revisa en que poiscion se agrega en el header
     for (j = 0; j < 100; j++){
         if (files[j].start_byte == 0 && files[j].end_byte == 0){
@@ -102,9 +121,7 @@ void addFile(char *tarName, char *newFile) {//
     fwrite(filebuffer, informacion_archivo.st_size, 1, f);
     fclose(nf);
 
-    fseek(f, 0, SEEK_SET);
-    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
-    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    pasteHeader(blocks, files, tarName);
     fclose(f);
     
 }
@@ -145,8 +162,7 @@ void defragmentArchive(char *tarName) {
     int count = 0;
 
     FILE *f = fopen(tarName, "r+");
-    fread(files, sizeof(struct EntryFile)*100, 1, f);
-    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    copyHeader(blocks, files, tarName);
 
     numTotal(blocks, files, numblocks);
 
@@ -182,9 +198,7 @@ void defragmentArchive(char *tarName) {
         count++;
     }
 
-    fseek(f, 0, SEEK_SET);
-    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
-    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    pasteHeader(blocks, files, tarName);
     ftruncate(fileno(f), blocks[0].start_byte);
     fclose(f);
 }
@@ -326,12 +340,7 @@ void create(char *tarName, char *filesToAdd) {
         fileCount++;
         token = strtok(NULL, ", ");
     }
-    fseek(fp_tar, 0, SEEK_SET);
-    fwrite(header, sizeof(struct EntryFile), fileCount, fp_tar);
-
-    fseek(fp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
-    fwrite(free_block, sizeof(struct FreeBlock), 100, fp_tar);
-    
+    pasteHeader(free_block, header, tarName);
     fclose(fp_tar);
     free(archivos_copy);
 
