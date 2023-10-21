@@ -42,7 +42,71 @@ void update() { //
 }
 
 //Command -r append
-void addFile() {//
+void addFile(char *tarName, char *newFile) {//
+    struct EntryFile files[100];
+    struct FreeBlock blocks[100];
+    char file0[20];
+    struct stat informacion_archivo;
+
+    FILE *f = fopen(tarName, "r+");
+    fread(files, sizeof(struct EntryFile)*100, 1, f);
+    fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    strcpy(file0, files[0].filename);
+
+    FILE *nf = fopen(newFile, "r");
+    stat(newFile, &informacion_archivo);
+    
+    char filebuffer[informacion_archivo.st_size];
+    int i, j, lastfile; 
+    int noblock = 1;
+
+    // Revisa si cabe en algun hueco existente
+    for (i = 0; i < 100; i++){
+        if (blocks[i].end_byte - blocks[i].start_byte >= informacion_archivo.st_size){
+            noblock = 0;
+            break;
+        }
+        noblock = 1;
+    }
+    // Revisa en que poiscion se agrega en el header
+    for (j = 0; j < 100; j++){
+        if (files[j].start_byte == 0 && files[j].end_byte == 0){
+            break;
+        }
+        else{
+            lastfile = j;
+        }
+    }
+    fread(filebuffer, informacion_archivo.st_size, 1, nf);
+    // Revisa si se tiene que mandar al final
+    if (noblock){ 
+        files[j].start_byte = files[lastfile].end_byte;
+    } else{
+        files[j].start_byte = blocks[i].start_byte;
+    }
+    printf("INicio :%ld\n", files[j].start_byte);
+    // Agrega data al Header
+    files[j].end_byte = files[j].start_byte + (long)informacion_archivo.st_size;
+    files[j].size = (long)informacion_archivo.st_size;
+    strcpy(files[j].filename, newFile);
+    // Resiva si todavia queda espacio
+    if (blocks[i].end_byte - blocks[i].start_byte == informacion_archivo.st_size){
+        blocks[i].start_byte = 0;
+        blocks[i].end_byte = 0;
+    }
+    else{
+        blocks[i].start_byte = files[j].end_byte;
+        strcpy(files[0].filename, file0);
+    }
+    fseek(f, files[j].start_byte, SEEK_SET);
+    fwrite(filebuffer, informacion_archivo.st_size, 1, f);
+    fclose(nf);
+
+    fseek(f, 0, SEEK_SET);
+    fwrite(files, sizeof(struct EntryFile)*100, 1, f);
+    fwrite(blocks, sizeof(struct FreeBlock)*100, 1, f);
+    fclose(f);
+    
 }
 
 void numTotal(struct FreeBlock *Free, struct EntryFile *Files, int *nums){
@@ -74,13 +138,13 @@ bool concatenateBlocks(struct FreeBlock *Free){
 }
 
 //Command -p //Reajuste de campos libres
-void defragmentArchive() {
+void defragmentArchive(char *tarName) {
     struct EntryFile files[100];
     struct FreeBlock blocks[100];
     int numblocks[2];
     int count = 0;
 
-    FILE *f = fopen("pruebaTar.star", "r+");
+    FILE *f = fopen(tarName, "r+");
     fread(files, sizeof(struct EntryFile)*100, 1, f);
     fread(blocks, sizeof(struct FreeBlock)*100, 1, f);
 
@@ -174,7 +238,7 @@ void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool
 
 void list(char *tarName) { //Muestra Header con datos (lista contenido)
     struct EntryFile empResult[100]; 
-    FILE *f = fopen("pruebaTar.star", "rb");
+    FILE *f = fopen(tarName, "rb");
 
     if (f != NULL) {
         size_t result = fread(empResult, sizeof(struct EntryFile), 100, f);
@@ -200,7 +264,7 @@ void list(char *tarName) { //Muestra Header con datos (lista contenido)
 }
 
 void create(char *tarName, char *filesToAdd) {
-    FILE *fp_tar = fopen("pruebaTar.star", "wb");
+    FILE *fp_tar = fopen(tarName, "wb");
     if (fp_tar == NULL) {
         perror("No se pudo abrir el archivo de destino");
         exit(1);
@@ -526,7 +590,10 @@ int main(int argc, char* argv[]) {
     //startExtract(argv[2], argv[3]); //Funciona para extraer 1 en específico y con datos quemados, esto lo hice de acuerdo
     //list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
     //delete(argv[2], argv[3]); //Elimina 1 archivo, actualiza el header y los bloques libres
-    //defragmentArchive();
+    //defragmentArchive(argv[2]);
+    list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
+    addFile(argv[2], argv[3]);
+    list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
 
 
     //pruebaRead(); //Este muestra todo lo que hay en struct FileEntry
