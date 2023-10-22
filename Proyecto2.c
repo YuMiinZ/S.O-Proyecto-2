@@ -164,38 +164,44 @@ void update(char *tarName, char *fileName) {
     strcpy(file0, files[0].filename);
 
     FILE *nf = fopen(fileName, "r");
-
     stat(fileName, &informacion_archivo);
     char *fileBuffer = (char *)malloc(informacion_archivo.st_size);
-
     fread(fileBuffer, informacion_archivo.st_size, 1, nf);
     fclose(nf);
+    printf("Se copia la info del nuevo archivo\n");
 
     blocks[indexBlock].start_byte = files[indexFile].start_byte;
     blocks[indexBlock].end_byte = files[indexFile].end_byte;
-    printf("New Block: Inicio: %ld, Final: %ld\n", blocks[indexBlock].start_byte, blocks[indexBlock].end_byte);
+    printf("Nuevo bloque disponible: Inicio: %ld, Final: %ld\n", 
+            blocks[indexBlock].start_byte, blocks[indexBlock].end_byte);
     concatenateBlocks(blocks, indexBlock);
     
     //Se borra la informacion del star pero no del header
     fseek(f, files[indexFile].start_byte, SEEK_SET);
     fwrite(fileBufferEmpty, files[indexFile].size, 1, f);
+    printf("se borra la informacion del archivo: %s, Inicia: %ld, Termina: %ld\n", 
+            files[indexFile].filename, files[indexFile].start_byte, files[indexFile].end_byte);
 
     // Revisa si tiene que mandar la informacion al final
     if(findSuitableBlock(blocks, informacion_archivo.st_size, block) == 0){
+        printf("se encuentra bloque donde poder guardarlo Inicia: %ld, Termina: %ld\n", 
+                blocks[block[0]].start_byte, blocks[block[0]].end_byte);
         files[indexFile].start_byte = blocks[block[0]].start_byte;
     } else{
+        printf("Ningun espacio vacio disponible por lo que se envia al final del documento, en el byte: %ld\n", 
+                files[lastFile].end_byte);
         files[indexFile].start_byte = files[lastFile].end_byte;
     }
-
     // Pone el nuevo archivo en el star
     fseek(f, files[indexFile].start_byte, SEEK_SET);
     fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
     files[indexFile].end_byte = ftell(f);
     space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
+    printf("Archivo Actualizado Nombre: %s, Inicio: %ld, Final: %ld\n", 
+            files[indexFile].filename, files[indexFile].start_byte, files[indexFile].end_byte);
 
     fclose(f);
     pasteHeader(blocks, files, tarName);
-    printf("FILE: Nombre: %s, Inicio: %ld, Final: %ld\n", files[indexFile].filename, files[indexFile].start_byte, files[indexFile].end_byte);
 
 }
 
@@ -229,12 +235,15 @@ void addFile(char *tarName, char *newFilename) {//
     
     // Copia la informacion del archivo a agregar
     fread(fileBuffer, informacion_archivo.st_size, 1, nf);
+    printf("se copia la informacion del nuevo archivo\n");
     fclose(nf);
     // Revisa si se tiene que mandar al final
     if (noblock == 1){ 
+        printf("No se encuentra espacios disponibles para el archivo por lo que se almacena al final");
         files[j].start_byte = files[lastfile].end_byte;
     } else{
-        printf("Index: %d\n", indexBlock[0]);
+        printf("Se encuentra espacio disponible: Inicia: %ld, Termina: %ld\n", 
+                blocks[indexBlock[0]].start_byte, blocks[indexBlock[0]].end_byte);
         files[j].start_byte = blocks[indexBlock[0]].start_byte;
     }
 
@@ -242,6 +251,8 @@ void addFile(char *tarName, char *newFilename) {//
     files[j].end_byte = files[j].start_byte + (long)informacion_archivo.st_size;
     files[j].size = (long)informacion_archivo.st_size;
     strcpy(files[j].filename, newFilename);
+    printf("Se actualiza el header con: Indice: %d, Nombre: %s, Empieza: %ld, Termina: %ld\n",
+            j, files[j].filename, files[j].start_byte, files[j].end_byte);
     
     // Revisa si todavia queda espacio
     space(blocks, files, indexBlock[0], j, informacion_archivo.st_size, file0);
@@ -250,6 +261,7 @@ void addFile(char *tarName, char *newFilename) {//
     FILE *f = fopen(tarName, "r+");
     fseek(f, files[j].start_byte, SEEK_SET);
     fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
+    printf("Se actualiza el .Star");
     fclose(f);
     pasteHeader(blocks, files, tarName);
     
@@ -265,6 +277,7 @@ void defragmentArchive(char *tarName) {
     copyHeader(blocks, files, tarName);
 
     numTotal(blocks, files, numblocks);
+    printf("ES: %d\n", numblocks[0]);
     if (numblocks[0] == 0){
         printf("No hay espacios vacios para desfragmentar\n");
         return;
@@ -280,11 +293,13 @@ void defragmentArchive(char *tarName) {
                 if (blocks[i].end_byte != files[j].start_byte){
                     continue;
                 }  
+                printf("se encuentra archivo que le siga al hueco\n");
                 char file[files[j].size];
 
                 fseek(f, files[j].start_byte, SEEK_SET);
                 fread(file, files[j].size, 1, f);
-                printf("Posicion inicial archivo: %ld, posicion final: %ld\n", files[j].start_byte, files[j].end_byte);
+                printf("Archivo: Nombre: %s Posicion inicial archivo: %ld, posicion final: %ld\n", 
+                        files[j].filename, files[j].start_byte, files[j].end_byte);
 
                 fseek(f, blocks[i].start_byte, SEEK_SET);
                 fwrite(file, files[j].size, 1, f);
@@ -294,6 +309,7 @@ void defragmentArchive(char *tarName) {
                 files[j].end_byte =  blocks[i].start_byte = ftell(f);
                 printf("Nueva posicion del archivo: I: %ld F: %ld\n", files[j].start_byte, files[j].end_byte);
                 if (concatenateBlocks(blocks, i)){
+                    printf("se encuentra otro hueco por lo que se fucionan");
                     numblocks[0]--;
                 }
                 printf("Posicion del bloque: I:%ld, F: %ld\n", blocks[0].start_byte, blocks[0].end_byte);
@@ -302,8 +318,10 @@ void defragmentArchive(char *tarName) {
         count++;
     }
     ftruncate(fileno(f), blocks[0].start_byte);
+    printf("Nuevo peso del archivo: %ld\n", blocks[0].start_byte);
     fclose(f);
-    blocks[0].start_byte = blocks[0].end_byte = 0;
+    blocks[0].start_byte = 0;
+    blocks[0].end_byte = 0;
     pasteHeader(blocks, files, tarName);
 
 }
@@ -715,7 +733,7 @@ int main(int argc, char* argv[]) {
 
 
     //pruebaRead(); //Este muestra todo lo qkkkue hay en struct FileEntry
-    //pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
+    pruebaRead1(); //Muestra todos los espacios tanto libre como no libre
     //pruebaFreeBlocks(); //Muestra todos los libres (con datos de cuáles son libres)
     
     
@@ -723,11 +741,11 @@ int main(int argc, char* argv[]) {
     //list(argv[2]); 
 
     //delete(argv[2], argv[3]);
-    //defragmentArchive(argv[2]);
-    //list(argv[2]); 
-    update(argv[2], argv[3]);
+    defragmentArchive(argv[2]);
+    list(argv[2]); 
+    //update(argv[2], argv[3]);
      
-    list(argv[2]);
+    //list(argv[2]);
     //addFile(argv[2], argv[3]);
     //list(argv[2]); 
     
