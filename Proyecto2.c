@@ -83,26 +83,28 @@ bool concatenateBlocks(struct FreeBlock *Free, int i){
     return false;
 }
 
-bool concatenateBlocksDelete(struct FreeBlock *Free){
-    for (int i = 0; i < 100; i++){
-        if(Free[i].end_byte==0 && Free[i].start_byte==0){
-            continue;
-        }
-        for(int j = 0; j < 100 ; j++){
-            if (Free[i].end_byte == Free[j].start_byte){
-                Free[i].end_byte = Free[j].end_byte;
-                Free[j].start_byte = 0;
-                Free[j].end_byte = 0;
-                return true;
-            } 
-            if (Free[i].start_byte == Free[j].end_byte){
-                Free[j].start_byte = 0;
-                Free[j].end_byte = 0;
-                return true;
+void concatenateBlocksDelete(struct FreeBlock *Free){
+    for (int z = 0; z < 2; z++){
+        for (int i = 0; i < 100; i++){
+            if(Free[i].end_byte==0 && Free[i].start_byte==0){
+                continue;
             }
+            for(int j = 0; j < 100 ; j++){
+                if (Free[i].end_byte == Free[j].start_byte){
+                    Free[i].end_byte = Free[j].end_byte;
+                    Free[j].start_byte = 0;
+                    Free[j].end_byte = 0;
+                    break;
+                } 
+                if (Free[i].start_byte == Free[j].end_byte){
+                    Free[j].start_byte = 0;
+                    Free[j].end_byte = 0;
+                    break;
+                }
+            }
+            break;
         }
     }
-    return false;
 }
 
 // Funcion para descubrir si un archivo entra en un hueco
@@ -235,6 +237,56 @@ void startUpdateV(char *tarName, char *fileName) {
     pasteHeader(blocks, files, tarName);
 
 }
+void startUpdate(char *tarName, char *fileName) {
+    struct EntryFile files[100];
+    struct FreeBlock blocks[100];
+    struct EntryFile tmpfiles[100];
+    struct stat informacion_archivo;
+
+    FILE *f = fopen(tarName, "r+b");
+    copyHeader(blocks, files, tarName);
+    copySortFiles(files, tmpfiles);
+
+    int indexFile = findFile(files, fileName);
+    if (indexFile == -1){
+        return;
+    }
+    int indexBlock = findEmptyBlock(blocks);
+    int block[1];
+
+    char fileBufferEmpty[files[indexFile].size];
+    char file0[20];
+    strcpy(file0, files[0].filename);
+
+    FILE *nf = fopen(fileName, "rb");
+    stat(fileName, &informacion_archivo);
+    char *fileBuffer = (char *)malloc(informacion_archivo.st_size);
+    fread(fileBuffer, informacion_archivo.st_size, 1, nf);
+    fclose(nf);
+
+    blocks[indexBlock].start_byte = files[indexFile].start_byte;
+    blocks[indexBlock].end_byte = files[indexFile].end_byte;
+    concatenateBlocks(blocks, indexBlock);
+    
+    //Se borra la informacion del star pero no del header
+    fseek(f, files[indexFile].start_byte, SEEK_SET);
+    fwrite(fileBufferEmpty, files[indexFile].size, 1, f);
+
+    // Revisa si tiene que mandar la informacion al final
+    if(findSuitableBlock(blocks, informacion_archivo.st_size, block) == 0){
+        files[indexFile].start_byte = blocks[block[0]].start_byte;
+    } else{
+        files[indexFile].start_byte = tmpfiles[0].end_byte;
+    }
+    // Pone el nuevo archivo en el star
+    fseek(f, files[indexFile].start_byte, SEEK_SET);
+    fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
+    files[indexFile].end_byte = ftell(f);
+    space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
+
+    fclose(f);
+    pasteHeader(blocks, files, tarName);
+}
 
 //Command -r append
 void startAddFileV(char *tarName, char *newFilename) {//
@@ -298,8 +350,62 @@ void startAddFileV(char *tarName, char *newFilename) {//
     pasteHeader(blocks, files, tarName);
     
 }
+
+void startAddFile(char *tarName, char *newFilename) {//
+    struct EntryFile files[100];
+    struct EntryFile tmpfiles[100];
+    struct FreeBlock blocks[100];
+    char file0[20];
+    struct stat informacion_archivo;
+
+    copyHeader(blocks, files, tarName);
+    copySortFiles(files, tmpfiles);
+    FILE *nf = fopen(newFilename, "rb");
+    stat(newFilename, &informacion_archivo);
+    
+    char fileBuffer[informacion_archivo.st_size];
+    int j; 
+    int noblock = 1;
+    int indexBlock[1];
+
+    // Revisa si cabe en algun hueco existente
+    noblock = findSuitableBlock(blocks, informacion_archivo.st_size, indexBlock);
+    // Revisa en que poiscion se agrega en el header
+    for (j = 0; j < 100; j++){
+        if (files[j].start_byte == 0 && files[j].end_byte == 0){
+            break;
+        }
+    }
+    
+    // Copia la informacion del archivo a agregar
+    fread(fileBuffer, informacion_archivo.st_size, 1, nf);
+    fclose(nf);
+    // Revisa si se tiene que mandar al final
+    if (noblock == 1){ 
+        files[j].start_byte = tmpfiles[0].end_byte;
+    } else{
+        files[j].start_byte = blocks[indexBlock[0]].start_byte;
+    }
+
+    // Agrega data al Header
+    files[j].end_byte = files[j].start_byte + (long)informacion_archivo.st_size;
+    files[j].size = (long)informacion_archivo.st_size;
+    strcpy(files[j].filename, newFilename);
+    
+    // Revisa si todavia queda espacio
+    strcpy(file0, files[0].filename);
+    space(blocks, files, indexBlock[0], j, informacion_archivo.st_size, file0);
+
+    // pega la informacion del archivo a agregar
+    FILE *f = fopen(tarName, "r+b");
+    fseek(f, files[j].start_byte, SEEK_SET);
+    fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
+    fclose(f);
+    pasteHeader(blocks, files, tarName);
+}
+
 //Command -p //Reajuste de campos libres
-void startDefragmentArchiveV(char *tarName) {
+void startDefragmentFileV(char *tarName) {
     struct EntryFile files[100];
     struct FreeBlock blocks[100];
     int numblocks[2];
@@ -358,6 +464,59 @@ void startDefragmentArchiveV(char *tarName) {
     pasteHeader(blocks, files, tarName);
 
 }
+
+void startDefragmentFile(char *tarName) {
+    struct EntryFile files[100];
+    struct FreeBlock blocks[100];
+    int numblocks[2];
+    int count = 0;
+
+    FILE *f = fopen(tarName, "r+b");
+    copyHeader(blocks, files, tarName);
+
+    numTotal(blocks, files, numblocks);
+    printf("ES: %d\n", numblocks[0]);
+    if (numblocks[0] == 0){
+        printf("No hay espacios vacios para desfragmentar\n");
+        return;
+    }
+
+    while (numblocks[0] >= 0 && count <= numblocks[1]+1){
+        for (int i = 0; i < 100; i++){
+            if (blocks[i].end_byte == 0 && blocks[i].end_byte == 0){
+                continue;
+            }
+
+            for (int j = 0; j < 100; j++){
+                if (blocks[i].end_byte != files[j].start_byte){
+                    continue;
+                }  
+                char file[files[j].size];
+
+                fseek(f, files[j].start_byte, SEEK_SET);
+                fread(file, files[j].size, 1, f);
+
+                fseek(f, blocks[i].start_byte, SEEK_SET);
+                fwrite(file, files[j].size, 1, f);
+
+                files[j].start_byte = blocks[i].start_byte;
+                blocks[i].end_byte = files[j].end_byte;
+                files[j].end_byte =  blocks[i].start_byte = ftell(f);
+                if (concatenateBlocks(blocks, i)){
+                    numblocks[0]--;
+                }
+            }
+        }
+        count++;
+    }
+    int indexB = lastActualyBlock(blocks);
+    ftruncate(fileno(f), blocks[indexB].start_byte);
+    fclose(f);
+    blocks[indexB].start_byte = 0;
+    blocks[indexB].end_byte = 0;
+    pasteHeader(blocks, files, tarName);
+}
+
 //---------------------------------------------------------------------------------------------------------------
 void verificarComandos(int argc, char *argv[], bool *verbose, bool *create, bool *extract, bool *list, bool *delete, 
                                  bool *update, bool *append, bool *pack, bool *foundF) {
@@ -756,9 +915,7 @@ void startDeleteV(char *tarName, char *fileName) {
         fwrite(header, sizeof(struct EntryFile), 100, tp_tar);
 
         //Actualizar el bloque vacío
-        if(concatenateBlocksDelete(freeBlock)){
-            printf("junte\n");
-        } else {printf("NO junte\n");}
+        concatenateBlocksDelete(freeBlock);
 
 
         fseek(tp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
@@ -821,6 +978,7 @@ int main(int argc, char* argv[]) {
         startUpdateV(argv[2], argv[3]);
     } else if(update && !verbose){
         printf("update sin verbose\n");
+        startUpdate(argv[2], argv[3]);
     }
 
     else if(append && verbose){
@@ -829,13 +987,15 @@ int main(int argc, char* argv[]) {
 
     } else if(append && !verbose){
         printf("append sin verbose\n");
+        startAddFile(argv[2], argv[3]);
     }
 
     else if(pack && verbose){
         printf("pack con verbose\n");
-        startDefragmentArchiveV(argv[2]);
+        startDefragmentFileV(argv[2]);
     } else if(pack && !verbose){
         printf("pack sin verbose\n");
+        startDefragmentFile(argv[2]);
     }
 
     //create(argv[2], argv[3]); //Este es el create que funciona
