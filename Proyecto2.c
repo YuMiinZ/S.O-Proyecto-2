@@ -509,12 +509,7 @@ void startCreateV(char *tarName, char *filesToAdd) {
         token = strtok(NULL, ", ");
     }
     //Luego de finalizar con todos los archivos y la recolección de ssu respectiva información se inserta todo en el header
-    fseek(fp_tar, 0, SEEK_SET);
-    fwrite(header, sizeof(struct EntryFile), fileCount, fp_tar);
-
-    fseek(fp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
-    fwrite(free_block, sizeof(struct FreeBlock), 100, fp_tar);
-    fclose(fp_tar);
+    pasteHeader(free_block, header, tarName);
 
     printf("Archivos copiados al archivo tar exitosamente.\n");
 }
