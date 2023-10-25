@@ -207,7 +207,7 @@ void startUpdateV(char *tarName, char *fileName) {
     blocks[indexBlock].end_byte = files[indexFile].end_byte;
     printf("Nuevo bloque disponible: Inicio: %ld, Final: %ld\n", 
             blocks[indexBlock].start_byte, blocks[indexBlock].end_byte);
-    concatenateBlocks(blocks, indexBlock);
+    concatenateBlocksDelete(blocks);
     
     //Se borra la informacion del star pero no del header
     fseek(f, files[indexFile].start_byte, SEEK_SET);
@@ -220,6 +220,7 @@ void startUpdateV(char *tarName, char *fileName) {
         printf("se encuentra bloque donde poder guardarlo Inicia: %ld, Termina: %ld\n", 
                 blocks[block[0]].start_byte, blocks[block[0]].end_byte);
         files[indexFile].start_byte = blocks[block[0]].start_byte;
+        space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
     } else{
         printf("Ningun espacio vacio disponible por lo que se envia al final del documento, en el byte: %ld\n", 
                 tmpfiles[0].end_byte);
@@ -229,7 +230,7 @@ void startUpdateV(char *tarName, char *fileName) {
     fseek(f, files[indexFile].start_byte, SEEK_SET);
     fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
     files[indexFile].end_byte = ftell(f);
-    space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
+    
     printf("Archivo Actualizado Nombre: %s, Inicio: %ld, Final: %ld\n", 
             files[indexFile].filename, files[indexFile].start_byte, files[indexFile].end_byte);
 
@@ -275,6 +276,7 @@ void startUpdate(char *tarName, char *fileName) {
     // Revisa si tiene que mandar la informacion al final
     if(findSuitableBlock(blocks, informacion_archivo.st_size, block) == 0){
         files[indexFile].start_byte = blocks[block[0]].start_byte;
+        space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
     } else{
         files[indexFile].start_byte = tmpfiles[0].end_byte;
     }
@@ -282,7 +284,6 @@ void startUpdate(char *tarName, char *fileName) {
     fseek(f, files[indexFile].start_byte, SEEK_SET);
     fwrite(fileBuffer, informacion_archivo.st_size, 1, f);
     files[indexFile].end_byte = ftell(f);
-    space(blocks, files, indexBlock, indexFile, informacion_archivo.st_size, file0);
 
     fclose(f);
     pasteHeader(blocks, files, tarName);
@@ -423,7 +424,7 @@ void startDefragmentFileV(char *tarName) {
 
     while (numblocks[0] >= 0 && count <= numblocks[1]+1){
         for (int i = 0; i < 100; i++){
-            if (blocks[i].end_byte == 0 && blocks[i].end_byte == 0){
+            if (blocks[i].start_byte == 0 && blocks[i].end_byte == 0){
                 continue;
             }
 
@@ -657,7 +658,7 @@ void startCreateV(char *tarName, char *filesToAdd) {
             fwrite(buffer, 1, bytes_leidos, fp_tar);
         }
 
-        printf("Posición final: %ld\n", header[fileCount].end_byte);
+        printf("Tamaño actual del archivo final: %ld\n", header[fileCount].end_byte);
 
         //Posicionando para saber en qué posición debe de comenzar a empaquetar el siguiente archivo
         contentStart = header[fileCount].end_byte;
@@ -668,10 +669,90 @@ void startCreateV(char *tarName, char *filesToAdd) {
         token = strtok(NULL, ", ");
     }
     //Luego de finalizar con todos los archivos y la recolección de ssu respectiva información se inserta todo en el header
-    pasteHeader(free_block, header, tarName);
+    fseek(fp_tar, 0, SEEK_SET);
+    fwrite(header, sizeof(struct EntryFile), fileCount, fp_tar);
 
+    fseek(fp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
+    fwrite(free_block, sizeof(struct FreeBlock), 100, fp_tar);
+
+    fclose(fp_tar);
     printf("Archivos copiados al archivo tar exitosamente.\n");
 }
+
+void startCreate(char *tarName, char *filesToAdd) {
+    FILE *fp_tar = fopen(tarName, "wb");
+    if (fp_tar == NULL) {
+        perror("No se pudo abrir el archivo de destino");
+        exit(1);
+    }
+
+    //Creación de las estructuras
+    //El header está conformado por EntryFiles y FreeBlock
+    struct stat informacion_archivo;
+    struct EntryFile header[100]; //Se registrarán todos los archivos empaquetados en el star
+    struct FreeBlock free_block[100]; //Para el manejo de los espacios libres en el star
+
+    //Llena los espacios libres con 0, indicando que no hay ninguno al crear el star, debido a que sus archivos de adjuntan
+    //de manera secuencial
+    for (int i = 0; i < 100; i++) {
+        free_block[i].start_byte = 0;
+        free_block[i].end_byte = 0;
+    }
+
+    char *archivo;
+    int fileCount = 0;
+    long contentStart = (sizeof(struct EntryFile) * 100) + (sizeof(struct FreeBlock) * 100); //Cálculo para saber dónde termina el header
+
+    fseek(fp_tar, contentStart, SEEK_END);
+    char *token = strtok(filesToAdd, ",");
+    while (token != NULL) {
+        if (fileCount >= 100) {
+            printf("Se alcanzó el límite de 100 archivos. No se copiarán más.\n");
+            break;
+        }
+
+        //Inicio del proceso de empaquetar archivos, también se obtiene su respectiva información para añadirlo al header.
+        strcpy(header[fileCount].filename, token);
+        FILE *fp_archivo = fopen(token, "rb");
+        if (fp_archivo == NULL) {
+            perror("No se pudo abrir el archivo de origen");
+            fclose(fp_tar);
+            exit(1);
+        }
+        
+        stat(token, &informacion_archivo);
+        header[fileCount].size = (long)informacion_archivo.st_size;
+        header[fileCount].start_byte = contentStart;
+        header[fileCount].end_byte = contentStart + (long)informacion_archivo.st_size;
+        
+
+        fseek(fp_tar, contentStart, SEEK_SET);
+
+        char buffer[4096]; 
+        size_t bytes_leidos;
+
+        //Empaquetando el archivo...
+        while ((bytes_leidos = fread(buffer, 1, sizeof(buffer), fp_archivo)) > 0) {
+            fwrite(buffer, 1, bytes_leidos, fp_tar);
+        }
+
+        //Posicionando para saber en qué posición debe de comenzar a empaquetar el siguiente archivo
+        contentStart = header[fileCount].end_byte;
+
+        fclose(fp_archivo);
+        fileCount++;
+        token = strtok(NULL, ", ");
+    }
+    //Luego de finalizar con todos los archivos y la recolección de ssu respectiva información se inserta todo en el header
+    fseek(fp_tar, 0, SEEK_SET);
+    fwrite(header, sizeof(struct EntryFile), fileCount, fp_tar);
+
+    fseek(fp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
+    fwrite(free_block, sizeof(struct FreeBlock), 100, fp_tar);
+
+    fclose(fp_tar);
+}
+
 
 void pruebaRead(char *starName) { //Muestra todo el header
     struct EntryFile empResult[100]; 
@@ -828,6 +909,73 @@ void startExtractV(char *tarName, char *filesToExtract){ //Extrae solo lo primer
    
 }
 
+void extract(char *tarName, char *fileName, long start_byte, long end_byte){
+    FILE *inputFile = fopen(tarName, "rb");
+    if (inputFile == NULL) {
+        perror("No se pudo abrir el archivo de entrada");
+        exit(1);
+    }
+
+    FILE *outputFile = fopen(fileName, "wb");
+    if (outputFile == NULL) {
+        perror("No se pudo crear el archivo de salida");
+        fclose(inputFile);
+        exit(1);
+    }
+
+    long startByte = start_byte;
+    long endByte = end_byte;
+
+    fseek(inputFile, startByte, SEEK_SET);
+
+    char buffer[1024];
+    long bytesRead = 0;
+
+    //Extrae el archivo
+    while (startByte < endByte) {
+        size_t bytesToRead = (endByte - startByte) < sizeof(buffer) ? (size_t)(endByte - startByte) : sizeof(buffer);
+        size_t bytesReadThisIteration = fread(buffer, 1, bytesToRead, inputFile);
+
+        fwrite(buffer, 1, bytesReadThisIteration, outputFile);
+
+        startByte += bytesReadThisIteration;
+        bytesRead += bytesReadThisIteration;
+    }
+
+    fclose(inputFile);
+    fclose(outputFile);
+}
+
+// Inicio de la función extract (command -x), donde verifica si debe de extraer archivos en específico o todos.
+void startExtract(char *tarName, char *filesToExtract){ //Extrae solo lo primero y los datos están quemados
+    if(filesToExtract[0] == '\0'){
+        struct EntryFile *result = getListHeader(tarName);
+        char newFilename[30];
+        for (int i = 0; result[i].filename[0] != '\0'; i++) {
+            strcpy(newFilename, "extract_");
+            strcat(newFilename, result[i].filename);
+            extractV(tarName, newFilename, result[i].start_byte, result[i].end_byte);
+        }
+        free(result);
+    } else {
+        struct EntryFile *result = getListHeader(tarName);
+        char newFilename[30];
+        char *token = strtok(filesToExtract, ", ");
+        while (token != NULL) {
+            for (int i = 0; result[i].filename[0] != '\0'; i++) {
+                if(strcmp(result[i].filename, token)==0){
+                    strcpy(newFilename, "extract_");
+                    strcat(newFilename, result[i].filename);
+                    extractV(tarName, newFilename, result[i].start_byte, result[i].end_byte);
+                    break;
+                }                
+            }
+            token = strtok(NULL, ", ");
+        }
+        free(result);
+    }
+}
+
 void pruebaRead1(char *tarName){ // Muestra todos los bloques libres libres y no libres
     const char *tarFile = tarName;
     FILE *fp_tar = fopen(tarFile, "rb");
@@ -927,6 +1075,73 @@ void startDeleteV(char *tarName, char *fileName) {
     }
 }
 
+void startDelete(char *tarName, char *fileName) {
+    FILE *tp_tar = fopen(tarName, "r+b");
+    if (tp_tar == NULL) {
+        perror("No se pudo abrir el archivo tar");
+        exit(1);
+    }
+
+    struct EntryFile header[100];
+    fread(header, sizeof(struct EntryFile), 100, tp_tar);
+
+    struct FreeBlock freeBlock[100];
+    fread(freeBlock, sizeof(struct FreeBlock), 100, tp_tar);
+
+    //Busca el archivo a eliminar y devuelve su posición en el arreglo del header
+    int found = -1;
+    for (int i = 0; i < 100; i++) {
+        if (header[i].filename[0] != '\0' && strcmp(header[i].filename, fileName) == 0) {
+            found = i;
+            break;
+        }
+    }
+
+    if (found != -1) {
+        long start_byte = header[found].start_byte;
+        long end_byte = header[found].end_byte;
+
+        //Actualizar el bloque vacío
+        freeBlock[found].start_byte = start_byte;
+        freeBlock[found].end_byte = end_byte;
+
+        fseek(tp_tar, start_byte, SEEK_SET);
+
+        //Escribir bytes vacíos para borrar el contenido del archivo
+        char emptyBuffer[1024];
+        for (long j = start_byte; j < end_byte; j += sizeof(emptyBuffer)) {
+            size_t bytesToWrite = sizeof(emptyBuffer);
+            if (j + bytesToWrite > end_byte) {
+                bytesToWrite = end_byte - j;
+            }
+            fwrite(emptyBuffer, 1, bytesToWrite, tp_tar);
+        }
+        //Poniendo datos de archivo eliminado
+        header[found].start_byte = 0;
+        header[found].end_byte = 0;
+        header[found].size = 0;
+        header[found].filename[0] = '\0';
+
+        //Escribir el encabezado actualizado
+        fseek(tp_tar, 0, SEEK_SET);
+        fwrite(header, sizeof(struct EntryFile), 100, tp_tar);
+
+        //Actualizar el bloque vacío
+        concatenateBlocksDelete(freeBlock);
+
+
+        fseek(tp_tar, sizeof(struct EntryFile) * 100, SEEK_SET);
+        fwrite(freeBlock, sizeof(struct FreeBlock), 100, tp_tar);
+
+
+        fclose(tp_tar);
+
+    } else {
+        printf("Archivo no encontrado: %s\n\n", fileName);
+        fclose(tp_tar);
+    }
+}
+
 int main(int argc, char* argv[]) {
     printf("Cantidad de argumentos: %d\n", argc);
     printf("./a.out: %s\n", argv[0]);
@@ -947,6 +1162,7 @@ int main(int argc, char* argv[]) {
         startCreateV(argv[2], argv[3]);
     } else if (create && !verbose ){
         printf("Create sin verbose\n");
+        startCreate(argv[2], argv[3]);
     }
 
     else if(extract && verbose){
@@ -954,6 +1170,7 @@ int main(int argc, char* argv[]) {
         startExtractV(argv[2], argv[3]);
     } else if(extract && !verbose){
         printf("Extract sin verbose\n");
+        startExtract(argv[2], argv[3]);
     }
 
     else if(list){ //List no necesita V debido a que solo muestra el contenido, su proceso es solo obtener la info.
@@ -966,6 +1183,7 @@ int main(int argc, char* argv[]) {
         startDeleteV(argv[2], argv[3]);
     } else if(delete && !verbose){
         printf("Delete sin verbose\n");
+        startDelete(argv[2], argv[3]);
     }
 
     else if(update && verbose){
@@ -993,34 +1211,7 @@ int main(int argc, char* argv[]) {
         startDefragmentFile(argv[2]);
     }
 
-    //create(argv[2], argv[3]); //Este es el create que funciona
-    //startExtract(argv[2], argv[3]); //Funciona para extraer 1 en específico y con datos quemados, esto lo hice de acuerdo
-    //list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
-    //delete(argv[2], argv[3]); //Elimina 1 archivo, actualiza el header y los bloques libres
-    //defragmentArchive(argv[2]);
-    //list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
-    //addFile(argv[2], argv[3]);
-    //list(argv[2]); //Este es el que funciona para listar Muestra los archivos del header, tamaño, inicio, final, nombre */
-
-
-    //pruebaRead(argv[2]); //Este muestra todo lo que hay en struct FileEntry
-    //pruebaRead1(argv[2]); //Muestra todos los espacios tanto libre como no libre
-    //pruebaFreeBlocks(); //Muestra todos los libres (con datos de cuáles son libres)
-    
-    
-    //create(argv[2], argv[3]);
-    //list(argv[2]); 
-
-    //delete(argv[2], argv[3]);
-    //defragmentArchive(argv[2]);
-    //list(argv[2]); 
-    //update(argv[2], argv[3]);
-     
-    //list(argv[2]);
-    //addFile(argv[2], argv[3]);
-    //list(argv[2]); 
-    
-
-
+    pruebaRead(argv[2]); //Este muestra todo lo que hay en struct FileEntry
+    pruebaRead1(argv[2]); //Muestra todos los espacios tanto libre como no libre
     exit(0);
 }
